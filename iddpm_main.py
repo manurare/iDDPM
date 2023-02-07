@@ -210,7 +210,7 @@ def train(train_loader,
             model,
             x_p,
             t,
-            model_kwargs=None,
+            model_kwargs={'normalize_input': arg.normalize_input},
         )
 
         losses = compute_losses()

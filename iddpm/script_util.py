@@ -245,7 +245,7 @@ def create_gaussian_diffusion(
     timestep_respacing="",
     **kwargs,
 ):
-    betas = gd.get_named_beta_schedule(noise_schedule, steps)
+    betas, betas_train = gd.get_named_beta_schedule(noise_schedule, steps)
     if use_kl:
         loss_type = gd.LossType.RESCALED_KL
     elif rescale_learned_sigmas:
@@ -257,6 +257,7 @@ def create_gaussian_diffusion(
     return SpacedDiffusion(
         use_timesteps=space_timesteps(steps, timestep_respacing),
         betas=betas,
+        betas_train=betas_train,
         model_mean_type=(
             gd.ModelMeanType.EPSILON if not predict_xstart else gd.ModelMeanType.START_X
         ),

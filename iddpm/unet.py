@@ -459,7 +459,7 @@ class UNetModel(nn.Module):
         """
         return next(self.input_blocks.parameters()).dtype
 
-    def forward(self, x, timesteps, y=None):
+    def forward(self, x, timesteps, y=None, normalize_input=False):
         """
         Apply the model to an input batch.
 
@@ -468,6 +468,7 @@ class UNetModel(nn.Module):
         :param y: an [N] Tensor of labels, if class-conditional.
         :return: an [N x C x ...] Tensor of outputs.
         """
+        x = x / x.std(dim=(1, 2, 3), keepdims=True) if normalize_input else x
         assert (y is not None) == (
             self.num_classes is not None
         ), "must specify y if and only if the model is class-conditional"

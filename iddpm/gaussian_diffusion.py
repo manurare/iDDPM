@@ -25,7 +25,12 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
     they are committed to maintain backwards compatibility.
     """
     if schedule_name == "linear_large":
-        return betas_for_alpha_bar(num_diffusion_timesteps, lambda t: 1-t)
+        betas_train = betas_for_alpha_bar(num_diffusion_timesteps, lambda t: 1-t)
+        betas = betas_for_alpha_bar(
+            num_diffusion_timesteps,
+            lambda t: math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2,
+        )
+        return betas, betas_train
 
     if schedule_name == "linear":
         # Linear schedule from Ho et al, extended to work for any number of
@@ -35,12 +40,12 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
         beta_end = scale * 0.02
         return np.linspace(
             beta_start, beta_end, num_diffusion_timesteps, dtype=np.float64
-        )
+        ), None
     elif schedule_name == "cosine":
         return betas_for_alpha_bar(
             num_diffusion_timesteps,
             lambda t: math.cos((t + 0.008) / 1.008 * math.pi / 2) ** 2,
-        )
+        ), None
     else:
         raise NotImplementedError(f"unknown beta schedule: {schedule_name}")
 
@@ -125,10 +130,12 @@ class GaussianDiffusion:
         model_mean_type,
         model_var_type,
         loss_type,
+        betas_train=None,
         rescale_timesteps=False,
         input_scale=1.0,
         normalize_input=False
     ):
+        self.betas_train = betas_train
         self.input_scale = input_scale
         if self.input_scale != 1.0:
             self.normalize_input = True
@@ -209,10 +216,14 @@ class GaussianDiffusion:
         if noise is None:
             noise = th.randn_like(x_start)
         assert noise.shape == x_start.shape
-        x_t = _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start * self.input_scale \
-              + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) \
-              * noise
-        x_t = x_t / x_t.std(dim=(1,2,3), keepdims=True) if self.normalize_input else x_t
+        if self.betas_train is not None:
+            x_t = _extract_into_tensor(np.sqrt(self.betas_train), t, x_start.shape) * x_start * self.input_scale \
+                  + _extract_into_tensor(np.sqrt(1 - self.betas_train), t, x_start.shape) \
+                  * noise
+        else:
+            x_t = _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start * 1.0 \
+                  + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) \
+                  * noise
         return x_t
 
     def q_posterior_mean_variance(self, x_start, x_t, t):
