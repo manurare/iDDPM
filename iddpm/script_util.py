@@ -33,6 +33,8 @@ def model_and_diffusion_defaults():
         rescale_learned_sigmas=True,
         use_checkpoint=False,
         use_scale_shift_norm=True,
+        input_scale=1.0,
+        normalize_input=True
     )
 
 
@@ -56,6 +58,7 @@ def create_model_and_diffusion(
         rescale_learned_sigmas,
         use_checkpoint,
         use_scale_shift_norm,
+        **kwargs
 ):
     model = create_model(
         image_size,
@@ -80,6 +83,7 @@ def create_model_and_diffusion(
         rescale_timesteps=rescale_timesteps,
         rescale_learned_sigmas=rescale_learned_sigmas,
         timestep_respacing=timestep_respacing,
+        **kwargs
     )
     return model, diffusion
 
@@ -122,7 +126,7 @@ def create_model(
         use_checkpoint=use_checkpoint,
         num_heads=num_heads,
         num_heads_upsample=num_heads_upsample,
-        use_scale_shift_norm=use_scale_shift_norm,
+        use_scale_shift_norm=use_scale_shift_norm
     )
 
 
@@ -239,6 +243,7 @@ def create_gaussian_diffusion(
     rescale_timesteps=False,
     rescale_learned_sigmas=False,
     timestep_respacing="",
+    **kwargs,
 ):
     betas = gd.get_named_beta_schedule(noise_schedule, steps)
     if use_kl:
@@ -266,6 +271,7 @@ def create_gaussian_diffusion(
         ),
         loss_type=loss_type,
         rescale_timesteps=rescale_timesteps,
+        **kwargs
     )
 
 

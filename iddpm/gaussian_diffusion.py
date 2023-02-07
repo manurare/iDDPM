@@ -24,6 +24,9 @@ def get_named_beta_schedule(schedule_name, num_diffusion_timesteps):
     Beta schedules may be added, but should not be removed or changed once
     they are committed to maintain backwards compatibility.
     """
+    if schedule_name == "linear_large":
+        return betas_for_alpha_bar(num_diffusion_timesteps, lambda t: 1-t)
+
     if schedule_name == "linear":
         # Linear schedule from Ho et al, extended to work for any number of
         # diffusion steps.
@@ -123,7 +126,14 @@ class GaussianDiffusion:
         model_var_type,
         loss_type,
         rescale_timesteps=False,
+        input_scale=1.0,
+        normalize_input=False
     ):
+        self.input_scale = input_scale
+        if self.input_scale != 1.0:
+            self.normalize_input = True
+        else:
+            self.normalize_input = normalize_input
         self.model_mean_type = model_mean_type
         self.model_var_type = model_var_type
         self.loss_type = loss_type
@@ -199,11 +209,11 @@ class GaussianDiffusion:
         if noise is None:
             noise = th.randn_like(x_start)
         assert noise.shape == x_start.shape
-        return (
-            _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start
-            + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape)
-            * noise
-        )
+        x_t = _extract_into_tensor(self.sqrt_alphas_cumprod, t, x_start.shape) * x_start * self.input_scale \
+              + _extract_into_tensor(self.sqrt_one_minus_alphas_cumprod, t, x_start.shape) \
+              * noise
+        x_t = x_t / x_t.std(dim=(1,2,3), keepdims=True) if self.normalize_input else x_t
+        return x_t
 
     def q_posterior_mean_variance(self, x_start, x_t, t):
         """
