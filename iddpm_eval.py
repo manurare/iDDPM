@@ -153,8 +153,8 @@ def main(arg):
         )
         train_set, val_dataset = dataload(arg, augmentations, normalize, data_info)
         # make sure that batch size doesn't matter, since the model use laynorm, not batch norm. small batch size is very slow.
-        train_loader = torch.utils.data.DataLoader(val_dataset, batch_size=100, shuffle=False, pin_memory=True, num_workers=arg.workers)
-        val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=100, shuffle=False, pin_memory=True, num_workers=arg.workers)
+        train_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=arg.workers)
+        val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, pin_memory=True, num_workers=arg.workers)
 
         val_bpd = run_bpd_on_dataset(nll_model, model, val_loader, arg)
         train_bpd = run_bpd_on_dataset(nll_model, model, train_loader, arg)

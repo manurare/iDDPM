@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim
 import torch.utils.data
 import torchvision.transforms as transforms
+import tqdm
 
 from ExpUtils import *
 from utils.dataloader import datainfo, dataload
@@ -27,21 +28,25 @@ def init_parser():
     arg_parser = argparse.ArgumentParser(description='CIFAR10 quick training script')
 
     # Data args
-    arg_parser.add_argument('--data_path', default='../../data', type=str, help='dataset path')
-    arg_parser.add_argument('--dataset', default='cifar10', choices=['cifar10', 'cifar100', 'tinyimg', 'svhn', 'mnist', 'stl10'], type=str, help='Image Net dataset path')
+    arg_parser.add_argument('--data_path', default='data', type=str, help='dataset path')
+    arg_parser.add_argument('--dataset', default='cifar10', choices=['cifar10', 'cifar100', 'tinyimg', 'svhn', 'mnist', 'stl10', 'imgnet'], type=str, help='Image Net dataset path')
+    arg_parser.add_argument('--image_size', default=32, type=int)
     arg_parser.add_argument('-j', '--workers', default=4, type=int, metavar='N', help='number of data loading workers (default: 4)')
-    arg_parser.add_argument('--print-freq', default=500, type=int, metavar='N', help='log frequency (by iteration)')
+    arg_parser.add_argument('--print-freq', default=200, type=int, metavar='N', help='log frequency (by iteration)')
 
     # Optimization hyperparams
     arg_parser.add_argument('--epochs', default=500, type=int, metavar='N', help='number of total epochs to run')
     arg_parser.add_argument('--warmup', default=10, type=int, metavar='N', help='number of warmup epochs')
-    arg_parser.add_argument('-b', '--batch_size', default=128, type=int, metavar='N', help='mini-batch size (default: 128)', dest='batch_size')
+    arg_parser.add_argument('-b', '--batch_size', default=64, type=int, metavar='N', help='mini-batch size (default: 128)', dest='batch_size')
     arg_parser.add_argument('--lr', default=1e-4, type=float, help='initial learning rate')
 
     arg_parser.add_argument('--wd', default=0, type=float, help='weight decay (default: 0)')
 
     arg_parser.add_argument('--t_step', default=1000, type=int, metavar='N', help='T, but not use it')
-    arg_parser.add_argument('--beta_schd', type=str, default='cosine', choices=['cosine', 'linear'], help='not use it')
+    arg_parser.add_argument('--noise_schedule', type=str, default='cosine', choices=['cosine', 'linear', 'linear_large'], help='not use it')
+    arg_parser.add_argument('--predict_xstart', action="store_true", help="")
+    arg_parser.add_argument('--normalize_input', action="store_true", help="")
+    arg_parser.add_argument('--input_scale', default=1.0, type=float)
     arg_parser.add_argument('--loss', type=str, default='l1', choices=['l1', 'l2'], help='not use it')
 
     arg_parser.add_argument('--no_cuda', action='store_true', help='disable cuda')
@@ -68,9 +73,11 @@ def main(arg):
 
     # torch.cuda.set_device(arg.gpu)
     data_info = datainfo(logger, arg)
-    
+
+    diffusion_args = model_and_diffusion_defaults()
+    diffusion_args.update((k, args.__dict__[k]) for k in diffusion_args.keys() & args.__dict__.keys())
     model, diffusion = create_model_and_diffusion(
-        **model_and_diffusion_defaults()
+        **diffusion_args
     )
 
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -92,6 +99,7 @@ def main(arg):
         Data Augmentation
     '''
     augmentations = [
+        transforms.Resize([args.image_size, args.image_size]),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         *normalize
@@ -102,7 +110,7 @@ def main(arg):
     train_dataset, _ = dataload(arg, augmentations, normalize, data_info)
 
     # you can reduce the batch size for p(x), reduce the training time a bit
-    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=arg.batch_size, shuffle=True, pin_memory=True, num_workers=arg.workers)
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=arg.batch_size, shuffle=True, pin_memory=True, num_workers=0)
 
     '''
         Training
@@ -141,19 +149,20 @@ def main(arg):
         torch.save({'model_state_dict': model.state_dict(), 'epoch': epoch, 'optimizer_state_dict': optimizer.state_dict()},
                    os.path.join(arg.save_path, 'checkpoint.pth'))
 
-        if arg.dataset in ['cifar10', 'cifar100'] and not arg.no_fid:
+        if not arg.no_fid:
             sample_start = time.time()
             # sample_ema(diffusion_model, model_buffer, epoch, arg, title=None)
             # model.train()
-            iddpm_sample_q(model, diffusion, epoch, arg, num=16, save=True, i=0, title='_o')
-
-            inc, fid = sample_ema_iddpm(ema_model, diffusion, buffer, epoch, arg)
+            iddpm_sample_q(model, diffusion, epoch, arg, num=arg.batch_size, save=True, i=0, title='_o')
+            ema_model.eval()
+            iddpm_sample_q(model, diffusion, epoch, arg, num=arg.batch_size, save=True, i=0, title='_e')
+            # inc, fid = sample_ema_iddpm(ema_model, diffusion, buffer, epoch, arg)
             sample_end = time.time()
             print(f'sample takes {sample_end - sample_start}')
             sample_time += sample_end - sample_start
-            if fid != 0:
-                metrics['IS'] = inc
-                metrics['fid'] = fid
+            # if fid != 0:
+            #     metrics['IS'] = inc
+            #     metrics['fid'] = fid
 
         for k in tf_metrics:
             v = tf_metrics[k]
