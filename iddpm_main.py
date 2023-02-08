@@ -44,6 +44,7 @@ def init_parser():
 
     arg_parser.add_argument('--t_step', default=1000, type=int, metavar='N', help='T, but not use it')
     arg_parser.add_argument('--noise_schedule', type=str, default='cosine', choices=['cosine', 'linear', 'linear_large'], help='not use it')
+    arg_parser.add_argument('--learn_sigma', action="store_true", help="")
     arg_parser.add_argument('--predict_xstart', action="store_true", help="")
     arg_parser.add_argument('--normalize_input', action="store_true", help="")
     arg_parser.add_argument('--input_scale', default=1.0, type=float)
